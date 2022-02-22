@@ -21,13 +21,3 @@ module Async =
             let! unwrapped = x
             return f unwrapped
         }
-
-
-type Deferred<'t> =
-    | NotStartedYet
-    | InProgress
-    | Resolved of 't
-
-type AsyncEvent<'t> =
-    | Started
-    | Finished of 't

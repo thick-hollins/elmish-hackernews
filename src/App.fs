@@ -5,6 +5,8 @@ open Elmish.React
 open Feliz
 open Fable.SimpleHttp
 open Thoth.Json
+open Fable.DateFunctions
+open System
 
 let storyDecoder : Decoder<Story> =
     Decode.object (fun fields -> 
@@ -13,30 +15,31 @@ let storyDecoder : Decoder<Story> =
             title = fields.Required.At [ "title" ] Decode.string
             url = fields.Optional.At [ "url" ] Decode.string  
             score = fields.Required.At [ "score" ] Decode.int  
+            time = fields.Required.At [ "time" ] Decode.int  
         }
     )
 
-let loadStory (id : int) = async {
-    let storiesEndpoint = sprintf "https://hacker-news.firebaseio.com/v0/item/%d.json" id
-    let! (status, responseText) = Http.get storiesEndpoint
-    match status with
-    | 200 -> 
-        match Decode.fromString storyDecoder responseText with
-        | Ok story -> return LoadStoryItem (id, Ok story)
-        | Error parseError -> return LoadStoryItem (id, Error parseError)
-    | _ -> return LoadStoryItem (id, Error ("Http loading error" + string id))
-}
+let loadStory (id : int) = 
+    async {
+        let storyUrl = sprintf "https://hacker-news.firebaseio.com/v0/item/%d.json" id
+        let! (status, responseText) = Http.get storyUrl
+        match status with
+        | 200 -> 
+            match Decode.fromString storyDecoder responseText with
+            | Ok story -> return LoadStoryItem (id, Ok story)
+            | Error parseError -> return LoadStoryItem (id, Error parseError)
+        | _ -> return LoadStoryItem (id, Error ("Http loading error" + string id))
+    }
 
 let loadStories tab = 
-    
-    let categoryString = 
+    let category = 
         match tab with
         | Tab.New -> "new"
         | Tab.Top -> "top"
         | Tab.Best -> "best"
         | Tab.Jobs -> "job"
 
-    let storiesEndpoint = sprintf "https://hacker-news.firebaseio.com/v0/%sstories.json" categoryString
+    let storiesEndpoint = sprintf "https://hacker-news.firebaseio.com/v0/%sstories.json" category
     
     async {
         let! (status, responseText) = Http.get storiesEndpoint
@@ -122,16 +125,50 @@ let spinner =
     ]
 
 let renderItemContent (story : Story) =
-    match story.url with
-    | Some url ->
-        Html.a [
-            prop.style [ style.textDecoration.underline ]
-            prop.target.blank
-            prop.href url
-            prop.text story.title
+    
+    let fromUnix seconds =
+        DateTime(1970, 1, 1, 0, 0, 0, 0).AddSeconds(seconds) 
+    let ago = DateTime.UtcNow.FormatDistance(fromUnix(float story.time))
+
+    Html.div [
+        prop.classes [ B.Columns; B.IsMobile ]
+        prop.children [
+            Html.div [
+                prop.classes [ B.Column; B.IsNarrow ]
+                prop.children [
+                    Html.div [
+                        prop.className B.Icon
+                        prop.style [ style.marginLeft 20 ]
+                        prop.children [
+                            Html.i [prop.className "fa fa-poll fa-2x"]
+                            Html.span [
+                                prop.style [ style.marginLeft 10; style.marginRight 10 ]
+                                prop.text story.score
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+            Html.div [
+                prop.className B.Column
+                prop.children [
+                    match story.url with
+                    | Some url ->
+                        Html.a [
+                            prop.style [ style.textDecoration.underline ]
+                            prop.target.blank
+                            prop.href url
+                            prop.text story.title
+                        ]
+                    | None ->
+                        Html.p story.title
+                    Html.p [
+                        prop.text (sprintf "%s ago" ago)
+                    ]
+                ]
+            ]
         ]
-    | None ->
-        Html.p story.title
+    ]
 
 let renderItem (id : int) item =
     let renderedItem = 
@@ -148,7 +185,6 @@ let renderItem (id : int) item =
         prop.children [ renderedItem ]
     ]
 
-
 let renderItems items = 
     match items with
     | NotStartedYet -> Html.none
@@ -157,6 +193,10 @@ let renderItems items =
     | Resolved (Ok items) -> 
         items
         |> Map.toList
+        |> List.sortByDescending (fun (id, story) -> 
+            match story with
+            | Resolved (Ok story) -> story.time
+            | _ -> 0 )
         |> List.map (fun (id, story) -> renderItem id story)
         |> Html.div
 

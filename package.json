@@ -5,6 +5,7 @@
     "build": "webpack"
   },
   "dependencies": {
+    "date-fns": "^2.16.1",
     "react": "^16.8.0",
     "react-dom": "^16.8.0"
   },

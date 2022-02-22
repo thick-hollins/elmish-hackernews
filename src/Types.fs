@@ -1,6 +1,15 @@
 [<AutoOpen>]
 module Types
 
+type Deferred<'t> =
+    | NotStartedYet
+    | InProgress
+    | Resolved of 't
+
+type AsyncEvent<'t> =
+    | Started
+    | Finished of 't
+
 [<RequireQualifiedAccess>]
 type Tab = | New | Top | Best | Jobs
 
@@ -10,6 +19,7 @@ type Story =
         title: string
         url: string option
         score: int
+        time: int
     }
 
 type DeferredStory = Deferred<Result<Story, string>>
