@@ -48,8 +48,7 @@ let loadStories tab =
             let storyIds = Decode.fromString (Decode.list Decode.int) responseText
             match storyIds with
             | Ok ids -> 
-                let idList = ids |> List.truncate 10
-                return LoadStoryIds (Finished (Ok idList))
+                return LoadStoryIds (Finished (Ok ids))
 
             | Error err ->
                 return LoadStoryIds (Finished (Error err))
@@ -62,6 +61,8 @@ let init() =
         { 
             Stories = NotStartedYet
             ActiveTab = Tab.New
+            Queued = []
+            Page = 1
         }
 
     newState, Cmd.ofMsg (LoadStoryIds Started)
@@ -73,9 +74,11 @@ let update (msg: Msg) (state: State) =
         ({ state with Stories = InProgress }, Cmd.fromAsync (loadStories state.ActiveTab))
 
     | LoadStoryIds (Finished (Ok ids)) ->
-        let map = Map.ofList [ for id in ids -> (id, InProgress) ]
-        let commands = [ for id in ids -> Cmd.fromAsync (loadStory id) ]
-        ({ state with Stories = Resolved (Ok map) }, Cmd.batch commands)
+        let load = List.truncate 10 ids
+        let queued = List.skip 10 ids
+        let map = Map.ofList [ for id in load -> (id, InProgress) ]
+        let commands = [ for id in load -> Cmd.fromAsync (loadStory id) ]
+        ({ state with Stories = Resolved (Ok map); Queued = queued }, Cmd.batch commands)
 
     | LoadStoryIds (Finished (Error err)) ->
         ({ state with Stories = Resolved (Error err) }, Cmd.none)
@@ -104,8 +107,20 @@ let update (msg: Msg) (state: State) =
 
         | _ -> state, Cmd.none
 
+    | LoadMore ->
+        match state.Stories with
+        | Resolved (Ok stories) ->
+            let load = List.truncate 10 state.Queued
+            let queued = List.skip 10 state.Queued
+            let map = Map.ofList [ for id in load -> (id, InProgress) ]
+            let newMap = Map.fold (fun a k v -> Map.add k v a) stories map
+            let commands = [ for id in load -> Cmd.fromAsync (loadStory id) ]
+            ({ state with Stories = Resolved (Ok newMap); Queued = queued }, Cmd.batch commands)
+        | _ -> state, Cmd.none
+
     | ChangeTab tab -> 
         ({ state with ActiveTab = tab; Stories = InProgress }, Cmd.fromAsync (loadStories state.ActiveTab))
+
 
 
 let renderError (msg : string) =
@@ -242,6 +257,10 @@ let render (state: State) (dispatch: Msg -> unit) =
             ]
             renderTabs state.ActiveTab dispatch
             renderItems state.Stories
+            Html.button [
+                prop.text "Load More"
+                prop.onClick (fun _ -> dispatch LoadMore)
+            ]
         ]
     ]
 

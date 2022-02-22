@@ -28,9 +28,12 @@ type State =
     { 
         Stories: Deferred<Result<Map<int, DeferredStory>, string>> 
         ActiveTab: Tab
+        Queued: int list
+        Page: int
     }
 
 type Msg =
     | LoadStoryIds of AsyncEvent<Result<int list, string>>
     | LoadStoryItem of int * Result<Story, string> 
     | ChangeTab of Tab
+    | LoadMore
